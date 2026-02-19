@@ -16,8 +16,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Sequelize
-config/config.js
+
 
 # Build folder
 dist/
