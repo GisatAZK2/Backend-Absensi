@@ -1,0 +1,45 @@
+# Node modules
+node_modules/
+exports/
+uploads/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Sequelize
+config/config.js
+
+# Build folder
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
+
+# Sequelize database file (jika pakai sqlite)
+*.sqlite
+*.sqlite3
+
+# Lock file (optional, biasanya tetap di-commit)
