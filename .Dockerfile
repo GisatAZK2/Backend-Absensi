@@ -19,5 +19,5 @@ ENV NODE_ENV=production
 # Expose port sesuai app
 EXPOSE 3000
 
-# Command untuk menjalankan aplikasi
-CMD ["node", "index.js"]
+# Jalankan migration lalu start server
+CMD npx sequelize db:migrate && node index.js
