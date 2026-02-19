@@ -27,4 +27,4 @@ ENV NODE_ENV=production
 EXPOSE 3000
 
 # Jalankan migration lalu start server
-CMD ["sh", "-c", "sequelize db:migrate && node index.js"]
+CMD ["sh", "-c", "sequelize db:migrate && sequelize db:seed:all && node index.js"]
