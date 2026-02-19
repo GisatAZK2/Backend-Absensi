@@ -1,6 +1,12 @@
 # Gunakan image Node.js resmi
 FROM node:20-alpine
 
+# Install tzdata untuk timezone
+RUN apk add --no-cache tzdata
+
+# Set timezone ke WIB (Asia/Jakarta)
+ENV TZ=Asia/Jakarta
+
 # Set working directory di container
 WORKDIR /app
 
