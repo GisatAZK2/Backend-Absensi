@@ -2,7 +2,7 @@
 FROM node:20-alpine
 
 # Install tzdata untuk timezone
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata bash
 
 # Set timezone ke WIB (Asia/Jakarta)
 ENV TZ=Asia/Jakarta
@@ -10,20 +10,21 @@ ENV TZ=Asia/Jakarta
 # Set working directory di container
 WORKDIR /app
 
-# Salin package.json dan package-lock.json dulu (untuk caching layer npm install)
+# Salin package.json dan package-lock.json dulu
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --production
+# Install dependencies + sequelize-cli global supaya bisa migrate
+RUN npm install --production \
+    && npm install -g sequelize-cli
 
 # Salin semua source code ke container
 COPY . .
 
-# Set environment variable (Railway biasanya pakai .env)
+# Set environment variable
 ENV NODE_ENV=production
 
-# Expose port sesuai app
+# Expose port
 EXPOSE 3000
 
 # Jalankan migration lalu start server
-CMD npx sequelize db:migrate && node index.js
+CMD ["sh", "-c", "sequelize db:migrate && node index.js"]
