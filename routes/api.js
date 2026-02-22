@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const upload = require('../middleware/upload');
-const libur = require('../controllers/V1/hari_liburController');
 const generate = require('../controllers/V1/generate_absensi_Controller');
 
-// Import controller langsung
+
 const authController = require('../controllers/V1/authController');
 const absensiController = require('../controllers/V1/absensiController');
 const checkAbsenTime = require('../middleware/checkAbsenTime');
@@ -12,10 +11,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const generateAbsensiExcel = require('../utils/generateAbsensiExcel');
 
-// ======================
-// AUTH
-// ======================
-router.post('/v1/auth/login-dosen', authController.loginDosen);
+
 router.post('/v1/auth/login-mahasiswa', authController.loginMahasiswa);
 
 router.get('/v1/profile', authMiddleware, authController.getProfile);
@@ -50,9 +46,7 @@ router.get(
   absensiController.getAbsensiByMahasiswa
 );
 
-// =======================
-// DELETE ABSENSI
-// =======================
+
 router.delete(
   '/absensi/:id',
   authMiddleware,
@@ -60,6 +54,8 @@ router.delete(
 );
 
 // Router For Admin
+router.post('/v1/auth/login-admin', authController.loginDosen);
+router.get('/v1/admin/profile', authMiddleware, authController.getProfile);
 router.post('/v1/admin/generate-absensi', authMiddleware,generate.generateWithLibur);
 router.put('/v1/admin/update-absensi', authMiddleware,generate.updateAbsensiConfig);
 router.get('/v1/admin/get-flag-absensi', authMiddleware,generate.getAbsensiRelationFlag);

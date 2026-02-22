@@ -57,9 +57,7 @@ exports.loginMahasiswa = async (req, res) => {
 };
 
 
-// =======================
-// GET PROFILE
-// =======================
+
 exports.getProfile = async (req, res) => {
   try {
     const { id, role } = req.user;
