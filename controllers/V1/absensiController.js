@@ -46,7 +46,7 @@ function isLocationValid(lat, lng) {
 }
 
 async function isSesiAktif() {
-  const today = require('dayjs')().tz('Asia/Jakarta').format('YYYY-MM-DD');
+  const today = global.dayjs().format("YYYY-MM-DD");
 
   const absensi = await Absensi.findOne({
     where: {
