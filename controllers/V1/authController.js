@@ -39,7 +39,8 @@ exports.loginMahasiswa = async (req, res) => {
     const { nim } = req.body;
 
     const mahasiswa = await Mahasiswa.findOne({ where: { nim } });
-    if (!mahasiswa)
+
+    if (!mahasiswa || !mahasiswa.is_active)
       return res.status(404).json({ message: "NIM tidak ditemukan" });
 
     const token = jwt.sign(

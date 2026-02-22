@@ -20,6 +20,7 @@ const apiRoutes = require('./routes/api');
 
 
 app.use('/api', apiRoutes);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
 db.sequelize.sync().then(() => {

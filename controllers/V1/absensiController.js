@@ -2,24 +2,29 @@ const db = require('../../models');
 const { sequelize, Absensi, Absensi_Detail, Mahasiswa } = db;
 const { getDistance } = require('geolib');
 const { Transaction } = require('sequelize');
-const cloudinary = require("../../config/cloudinary");
+const storageService = require('../../utils/storageService');
 const fs = require("fs");
 
-
 const VALID_LOCATIONS = [
-  { lat: -6.288926, lng: 107.082678 },
+   { lat: -6.288926, lng: 107.082678 },
   { lat: -6.288821, lng: 107.082769 },
   { lat: -6.289092, lng: 107.083029 }
 ];
 
+
 const MAX_RADIUS = 100; 
 
+const toMinutes = (timeStr) => {
+  const [hour, minute] = timeStr.split(":").map(Number);
+  return hour * 60 + minute;
+};
 
-const PAGI_START = 6;
-const PAGI_END = 8.5;
+const DEFAULT_JAM = {
+  pagi: { start: "06:00", end: "09:00" },
+  malam: { start: "18:00", end: "21:00" }
+};
 
-const MALAM_START = 18;
-const MALAM_END = 21;
+const DEFAULT_TIPE = ["pagi", "malam"];
 
 const getCurrentHour = () => {
   const now = new Date();
@@ -33,30 +38,55 @@ function isLocationValid(lat, lng) {
       { latitude: lat, longitude: lng },
       { latitude: location.lat, longitude: location.lng }
     );
+
+    console.log("Distance:", distance); 
+
     return distance <= MAX_RADIUS;
   });
 }
 
+async function isSesiAktif() {
+  const today = new Date().toISOString().split("T")[0];
 
-function isSesiAktif(sesi) {
+  const absensi = await Absensi.findOne({
+    where: {
+      tanggal_absensi: today,
+      is_deleted: false
+    }
+  });
+
   const now = new Date();
-  const totalMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  if (sesi === "Pagi") {
-    const start = 6 * 60;     
-    const end = 8.5 * 60;       
-    return totalMinutes >= start && totalMinutes <= end;
+  // fallback default
+  let jamConfig = DEFAULT_JAM;
+  let tipeAktif = DEFAULT_TIPE;
+
+  if (absensi) {
+    if (absensi.jam && Object.keys(absensi.jam).length > 0) {
+      jamConfig = absensi.jam;
+    }
+
+    if (absensi.tipe_absensi && absensi.tipe_absensi.length > 0) {
+      tipeAktif = absensi.tipe_absensi;
+    }
   }
 
-  if (sesi === "Malam") {
-    const start = 18 * 60;    
-    const end = 21 * 60;      
-    return totalMinutes >= start && totalMinutes <= end;
+  for (const tipe of tipeAktif) {
+    const sesi = jamConfig[tipe];
+
+    if (!sesi) continue;
+
+    const start = toMinutes(sesi.start);
+    const end = toMinutes(sesi.end);
+
+    if (currentMinutes >= start && currentMinutes <= end) {
+      return tipe; // return sesi aktif (pagi / malam)
+    }
   }
 
-  return false;
+  return null;
 }
-
 
 function getAllowedStatus(sesi) {
   const onTime = isSesiAktif(sesi);
@@ -72,6 +102,17 @@ function getAllowedStatus(sesi) {
     on_time: false,
     allowed: ["Alpa"]
   };
+}
+
+function normalizeImageUrl(req, url) {
+  if (!url) return null;
+
+  if (url.startsWith("http")) return url;
+
+  const protocol = req.protocol;
+  const host = req.get("host"); 
+
+  return `${protocol}://${host}${url}`;
 }
 
 exports.absenMahasiswa = async (req, res) => {
@@ -109,11 +150,34 @@ exports.absenMahasiswa = async (req, res) => {
       });
     }
 
+    if (!mahasiswa.is_active) {
+      await t.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "Mahasiswa tidak aktif, tidak bisa melakukan absensi"
+      });
+    }
+
     const sesiMahasiswa = mahasiswa.sesi.toLowerCase();
 
-    // ==============================
-    // LOCK ABSENSI
-    // ==============================
+    const sesiAktif = await isSesiAktif();
+
+          if (!sesiAktif) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "Tidak ada sesi aktif saat ini"
+        });
+      }
+
+      if (sesiMahasiswa !== sesiAktif.toLowerCase()) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Sesi ${sesiMahasiswa} tidak aktif saat ini`
+        });
+      }
+   
     const absensi = await Absensi.findByPk(id_absensi, {
       transaction: t,
       lock: t.LOCK.UPDATE
@@ -127,9 +191,6 @@ exports.absenMahasiswa = async (req, res) => {
       });
     }
 
-    // ==============================
-    // CEK SUDAH ABSEN (LOCKED)
-    // ==============================
     const sudahAbsen = await Absensi_Detail.findOne({
       where: { id_absensi, id_mahasiswa },
       transaction: t,
@@ -248,15 +309,9 @@ exports.absenMahasiswa = async (req, res) => {
     // ==============================
     let url_gambar = null;
 
-    if (req.file) {
-      uploadedImage = await cloudinary.uploader.upload(req.file.path, {
-        folder: "absensi",
-      });
-
-      url_gambar = uploadedImage.secure_url;
-
-      fs.unlinkSync(req.file.path);
-    }
+      if (req.file) {
+        url_gambar = req.file.url;
+      }
 
     // ==============================
     // INSERT DETAIL (ANTI RACE)
@@ -379,28 +434,12 @@ exports.editAbsensiMahasiswa = async (req, res) => {
     // JIKA ADA FILE BARU → REPLACE
     // ==============================
     if (req.file) {
+        if (detail.bukti_foto) {
+          await storageService.deleteFile(detail.bukti_foto);
+        }
 
-      // Upload gambar baru dulu
-      uploadedImage = await cloudinary.uploader.upload(req.file.path, {
-        folder: "absensi",
-      });
-
-      fs.unlinkSync(req.file.path);
-
-      // Hapus gambar lama jika ada
-      if (detail.bukti_foto) {
-        const publicId = detail.bukti_foto
-          .split("/")
-          .slice(-2)
-          .join("/")
-          .split(".")[0];
-
-        await cloudinary.uploader.destroy(publicId);
+        newImageUrl = req.file.url;
       }
-
-      newImageUrl = uploadedImage.secure_url;
-    }
-
     // ==============================
     // UPDATE DATA
     // ==============================
@@ -565,23 +604,22 @@ exports.getAbsensiHariIni = async (req, res) => {
       }
     }
 
-    // 4. Gabungkan semua mahasiswa + status
     const result = allMahasiswa.map((mhs) => {
-      const data = absensiMap.get(mhs.id_mahasiswa) || {};
-      return {
-        id_mahasiswa: mhs.id_mahasiswa,
-        nama: mhs.nama_mahasiswa,
-        nim: mhs.nim,
-        kelas: mhs.kelas,
-        sesi: mhs.sesi,
-        status: data.status || "Belum Absen",
-        bukti_foto_url: data.bukti_foto_url || null,
-        jam: data.jam || null,
-        latitude: data.latitude || null,
-        longitude: data.longitude || null,
-      };
-    });
+  const data = absensiMap.get(mhs.id_mahasiswa) || {};
 
+  return {
+    id_mahasiswa: mhs.id_mahasiswa,
+    nama: mhs.nama_mahasiswa,
+    nim: mhs.nim,
+    kelas: mhs.kelas,
+    sesi: mhs.sesi,
+    status: data.status || "Belum Absen",
+    bukti_foto_url: normalizeImageUrl(req, data.bukti_foto_url),
+    jam: data.jam || null,
+    latitude: data.latitude || null,
+    longitude: data.longitude || null,
+  };
+});
     res.json({
       tanggal: today,
       absensi: result,
@@ -594,7 +632,7 @@ exports.getAbsensiHariIni = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    const userId = req.user.id; // asumsi dari middleware auth
+    const userId = req.user.id; 
     const mahasiswa = await db.Mahasiswa.findOne({
       where: { id_mahasiswa: userId },
       attributes: ['id_mahasiswa', 'nim', 'nama_mahasiswa', 'profile_path', 'kelas', 'sesi', 'createdAt', 'updatedAt']
@@ -663,15 +701,100 @@ exports.getFlagsAbsen = async (req, res) => {
   }
 };
 
-exports.getAllAbsensi = async (req, res) => {
+exports.getAbsensiSemuaHari = async (req, res) => {
   try {
-    const data = await db.Absensi_Detail.findAll({
-      order: [['createdAt', 'DESC']]
+    const { kelas, sesi, tanggal } = req.query;
+
+    // ==========================
+    // FILTER MAHASISWA
+    // ==========================
+    const mahasiswaWhere = {};
+    if (kelas) mahasiswaWhere.kelas = kelas;
+    if (sesi) mahasiswaWhere.sesi = sesi.toLowerCase();
+
+    const allMahasiswa = await db.Mahasiswa.findAll({
+      where: mahasiswaWhere,
+      attributes: ["id_mahasiswa", "nama_mahasiswa", "nim", "kelas", "sesi"],
+      order: [["nama_mahasiswa", "ASC"]],
     });
 
-    res.json(data);
+    if (!allMahasiswa.length) {
+      return res.json({
+        success: true,
+        message: "Tidak ada mahasiswa ditemukan",
+        data: [],
+      });
+    }
+
+    // ==========================
+    // FILTER ABSENSI
+    // ==========================
+    const absensiWhere = {};
+    if (tanggal) absensiWhere.tanggal_absensi = tanggal;
+
+    const semuaAbsensi = await db.Absensi.findAll({
+      where: absensiWhere,
+      include: [
+        {
+          model: db.Absensi_Detail,
+          as: "Absensi_Details",
+          required: false,
+        },
+      ],
+      order: [["tanggal_absensi", "DESC"]],
+    });
+
+    // ==========================
+    // PROSES DATA PER TANGGAL
+    // ==========================
+    const result = semuaAbsensi.map((absen) => {
+      const absensiMap = new Map();
+
+      for (const detail of absen.Absensi_Details || []) {
+        absensiMap.set(detail.id_mahasiswa, {
+          status: detail.status,
+          bukti_foto_url: detail.bukti_foto,
+          jam: detail.jam,
+          latitude: detail.latitude,
+          longitude: detail.longitude,
+        });
+      }
+
+      const mahasiswaData = allMahasiswa.map((mhs) => {
+        const data = absensiMap.get(mhs.id_mahasiswa) || {};
+
+        return {
+          id_mahasiswa: mhs.id_mahasiswa,
+          nama: mhs.nama_mahasiswa,
+          nim: mhs.nim,
+          kelas: mhs.kelas,
+          sesi: mhs.sesi,
+          status: data.status || "Belum Absen",
+          bukti_foto_url: normalizeImageUrl(req, data.bukti_foto_url),
+          jam: data.jam || null,
+          latitude: data.latitude || null,
+          longitude: data.longitude || null,
+        };
+      });
+
+      return {
+        tanggal: absen.tanggal_absensi,
+        absensi: mahasiswaData,
+      };
+    });
+
+    res.json({
+      success: true,
+      total_tanggal: result.length,
+      data: result,
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[getAbsensiSemuaHari]", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 

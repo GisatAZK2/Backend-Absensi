@@ -3,7 +3,8 @@ module.exports = (sequelize, DataTypes) => {
     tanggal: DataTypes.DATEONLY,
     keterangan: DataTypes.STRING,
     is_generated: DataTypes.BOOLEAN
-  });
+  }, {freezeTableName: true},
+);
 
   return HariLibur;
 };

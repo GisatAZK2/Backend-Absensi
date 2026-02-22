@@ -29,7 +29,7 @@ router.post(
   '/v1/absensi',
   authMiddleware,
   checkAbsenTime,
-  upload.single('bukti_foto'),
+  upload('bukti_foto'),
   absensiController.absenMahasiswa
 );
 
@@ -37,17 +37,8 @@ router.post(
 router.put(
   "/v1/edit-absensi",
   authMiddleware,
-  upload.single("bukti_foto"), // optional file
+  upload("bukti_foto"),
   absensiController.editAbsensiMahasiswa
-);
-
-// =======================
-// GET ALL ABSENSI
-// =======================
-router.get(
-  '/absensi',
-  authMiddleware,
-  absensiController.getAllAbsensi
 );
 
 // =======================
@@ -68,8 +59,17 @@ router.delete(
   absensiController.deleteAbsensi
 );
 
-// Router For Admin Generate Absensi
+// Router For Admin
 router.post('/v1/admin/generate-absensi', authMiddleware,generate.generateWithLibur);
+router.put('/v1/admin/update-absensi', authMiddleware,generate.updateAbsensiConfig);
+router.get('/v1/admin/get-flag-absensi', authMiddleware,generate.getAbsensiRelationFlag);
+
+router.get(
+  '/v1/admin/all-absensi',
+  authMiddleware,
+  absensiController.getAbsensiSemuaHari
+);
+
 router.post('/v1/admin/generate-excel-absensi', generateAbsensiExcel.generateAbsensiExcel);
 
 module.exports = router;

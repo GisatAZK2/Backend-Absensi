@@ -26,7 +26,9 @@ module.exports = (sequelize, DataTypes) => {
     sesi: {
       type: DataTypes.ENUM('Pagi', 'Malam'),
       allowNull: false
-    }
+    },
+
+    is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
 
   }, {
     freezeTableName: true,

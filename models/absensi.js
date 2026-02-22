@@ -14,6 +14,11 @@ module.exports = (sequelize, DataTypes) => {
       unique: true
     },
 
+    jam : {
+      type : DataTypes.JSON,
+      allowNull : true
+    },
+
     is_deleted: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
