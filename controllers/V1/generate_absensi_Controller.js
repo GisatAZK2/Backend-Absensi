@@ -388,3 +388,32 @@ exports.getAbsensiRelationFlag = async (req, res) => {
     });
   }
 };
+
+exports.getlistSesiAbsensi = async (req, res) => {
+  try {
+    const sesi = await Absensi.findAll({
+      where: {
+        is_deleted: false
+      },
+      attributes: [
+        "id_absensi",
+        "tanggal_absensi",
+        'tipe_absensi'
+      ],
+      order: [["tanggal_absensi", "DESC"]]
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil sesi absensi",
+      data: sesi
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan server",
+      error: error.message
+    });
+  }
+};

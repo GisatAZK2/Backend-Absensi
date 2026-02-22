@@ -13,7 +13,7 @@ const DEFAULT_JAM = {
 };
 const DEFAULT_TIPE = ["pagi", "malam"];
 
-const getToday = () => new Date().toISOString().split("T")[0];
+const getToday = require('dayjs')().tz('Asia/Jakarta').format('YYYY-MM-DD');
 
 const getNowInMinutes = () => {
   const now = new Date();

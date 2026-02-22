@@ -19,4 +19,4 @@ ENV NODE_ENV=production
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "sequelize db:migrate && sequelize db:seed:all && node index.js"]
+CMD ["sh", "-c", "node index.js"]
