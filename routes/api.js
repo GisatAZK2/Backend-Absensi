@@ -66,6 +66,13 @@ router.get(
   absensiController.getAbsensiSemuaHari
 );
 
+router.get(
+  '/v1/admin/absensi-date',
+  authMiddleware,
+  generate.getTanggalAbsensi
+);
+
+
 router.post('/v1/admin/generate-excel-absensi', generateAbsensiExcel.generateAbsensiExcel);
 
 module.exports = router;

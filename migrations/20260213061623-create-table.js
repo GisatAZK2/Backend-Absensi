@@ -167,12 +167,6 @@ module.exports = {
       },
     });
 
-    await queryInterface.addConstraint('Absensi_Detail', {
-      fields: ['id_absensi', 'id_mahasiswa'],
-      type: 'unique',
-      name: 'unique_absensi_mahasiswa'
-  });
-
 
     await queryInterface.createTable('Users', {
       id_user: {

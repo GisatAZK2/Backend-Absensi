@@ -703,15 +703,16 @@ exports.getFlagsAbsen = async (req, res) => {
 
 exports.getAbsensiSemuaHari = async (req, res) => {
   try {
-    const { kelas, sesi, tanggal } = req.query;
+    const { kelas, sesi, tanggal, sort  } = req.query;
 
     // ==========================
     // FILTER MAHASISWA
     // ==========================
     const mahasiswaWhere = {};
     if (kelas) mahasiswaWhere.kelas = kelas;
-    if (sesi) mahasiswaWhere.sesi = sesi.toLowerCase();
-
+    if (sesi && typeof sesi === 'string') {
+  mahasiswaWhere.sesi = sesi.toLowerCase();
+}
     const allMahasiswa = await db.Mahasiswa.findAll({
       where: mahasiswaWhere,
       attributes: ["id_mahasiswa", "nama_mahasiswa", "nim", "kelas", "sesi"],
@@ -732,6 +733,10 @@ exports.getAbsensiSemuaHari = async (req, res) => {
     const absensiWhere = {};
     if (tanggal) absensiWhere.tanggal_absensi = tanggal;
 
+    const sortOrder = (sort && typeof sort === 'string' && sort.toLowerCase() === 'asc')
+  ? 'ASC'
+  : 'DESC';
+
     const semuaAbsensi = await db.Absensi.findAll({
       where: absensiWhere,
       include: [
@@ -741,48 +746,61 @@ exports.getAbsensiSemuaHari = async (req, res) => {
           required: false,
         },
       ],
-      order: [["tanggal_absensi", "DESC"]],
+      
+      order: [["tanggal_absensi", sortOrder]],
     });
 
     // ==========================
     // PROSES DATA PER TANGGAL
     // ==========================
     const result = semuaAbsensi.map((absen) => {
-      const absensiMap = new Map();
+  const absensiMap = new Map();
 
-      for (const detail of absen.Absensi_Details || []) {
-        absensiMap.set(detail.id_mahasiswa, {
-          status: detail.status,
-          bukti_foto_url: detail.bukti_foto,
-          jam: detail.jam,
-          latitude: detail.latitude,
-          longitude: detail.longitude,
-        });
-      }
-
-      const mahasiswaData = allMahasiswa.map((mhs) => {
-        const data = absensiMap.get(mhs.id_mahasiswa) || {};
-
-        return {
-          id_mahasiswa: mhs.id_mahasiswa,
-          nama: mhs.nama_mahasiswa,
-          nim: mhs.nim,
-          kelas: mhs.kelas,
-          sesi: mhs.sesi,
-          status: data.status || "Belum Absen",
-          bukti_foto_url: normalizeImageUrl(req, data.bukti_foto_url),
-          jam: data.jam || null,
-          latitude: data.latitude || null,
-          longitude: data.longitude || null,
-        };
-      });
-
-      return {
-        tanggal: absen.tanggal_absensi,
-        absensi: mahasiswaData,
-      };
+  for (const detail of absen.Absensi_Details || []) {
+    absensiMap.set(detail.id_mahasiswa, {
+      status: detail.status,
+      bukti_foto_url: detail.bukti_foto,
+      jam: detail.jam,
+      latitude: detail.latitude,
+      longitude: detail.longitude,
     });
+  }
 
+  const sesiGroup = {
+    pagi: [],
+    malam: []
+  };
+
+  for (const mhs of allMahasiswa) {
+    const data = absensiMap.get(mhs.id_mahasiswa) || {};
+
+    const item = {
+      id_mahasiswa: mhs.id_mahasiswa,
+      nama: mhs.nama_mahasiswa,
+      nim: mhs.nim,
+      kelas: mhs.kelas,
+      sesi: mhs.sesi,
+      status: data.status || "Belum Absen",
+      bukti_foto_url: normalizeImageUrl(req, data.bukti_foto_url),
+      jam: data.jam || null,
+      latitude: data.latitude || null,
+      longitude: data.longitude || null,
+    };
+
+    const sesiKey = (mhs.sesi || '').toLowerCase();
+
+    if (sesiKey === 'pagi') {
+      sesiGroup.pagi.push(item);
+    } else if (sesiKey === 'malam') {
+      sesiGroup.malam.push(item);
+    }
+  }
+
+  return {
+    tanggal: absen.tanggal_absensi,
+    sesi_group: sesiGroup
+  };
+});
     res.json({
       success: true,
       total_tanggal: result.length,
@@ -797,7 +815,6 @@ exports.getAbsensiSemuaHari = async (req, res) => {
     });
   }
 };
-
 
 exports.getAbsensiByMahasiswa = async (req, res) => {
   try {

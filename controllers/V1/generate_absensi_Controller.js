@@ -417,3 +417,99 @@ exports.getlistSesiAbsensi = async (req, res) => {
     });
   }
 };
+
+exports.getTanggalAbsensi = async (req, res) => {
+  try {
+    // ==========================
+    // 1. AMBIL DATA ABSENSI
+    // ==========================
+    const absensi = await Absensi.findAll({
+      attributes: ["tanggal_absensi"],
+      raw: true,
+    });
+
+    const tanggalAbsensi = absensi.map(a => a.tanggal_absensi);
+
+    // ==========================
+    // 2. AMBIL HARI LIBUR CUSTOM
+    // ==========================
+    const hariLibur = await Hari_Libur.findAll({
+      attributes: ["tanggal"],
+      raw: true,
+    });
+
+    const tanggalLiburCustom = hariLibur.map(h => h.tanggal);
+
+    // ==========================
+    // 3. LIBUR NASIONAL
+    // ==========================
+    let tanggalLiburNasional = [];
+
+    try {
+      const response = await axios.get("https://api-harilibur.vercel.app/api");
+      tanggalLiburNasional = response.data.map(item => item.holiday_date);
+    } catch (err) {
+      console.warn("Gagal ambil libur nasional:", err.message);
+    }
+
+    // ==========================
+    // 4. GABUNG SEMUA TANGGAL
+    // ==========================
+    const semuaTanggal = [
+      ...tanggalAbsensi,
+      ...tanggalLiburCustom,
+      ...tanggalLiburNasional,
+    ];
+
+    // ==========================
+    // 5. CARI RANGE TANGGAL
+    // ==========================
+    const sorted = [...new Set(semuaTanggal)].sort(
+      (a, b) => new Date(a) - new Date(b)
+    );
+
+    let tanggalMinggu = [];
+
+    if (sorted.length > 0) {
+      const start = new Date(sorted[0]);
+      const end = new Date(sorted[sorted.length - 1]);
+
+      let current = new Date(start);
+
+      while (current <= end) {
+        if (current.getDay() === 0) {
+          tanggalMinggu.push(current.toISOString().split("T")[0]);
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    // ==========================
+    // 6. FINAL MERGE
+    // ==========================
+    const finalTanggal = [
+      ...semuaTanggal,
+      ...tanggalMinggu,
+    ];
+
+    const uniqueTanggal = [...new Set(finalTanggal)].sort(
+      (a, b) => new Date(a) - new Date(b)
+    );
+
+    // ==========================
+    // 7. RESPONSE
+    // ==========================
+    res.json({
+      success: true,
+      total: uniqueTanggal.length,
+      tanggal_absensi: uniqueTanggal,
+    });
+
+  } catch (err) {
+    console.error("[getTanggalAbsensi]", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
